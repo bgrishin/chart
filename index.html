@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Chart</title>
+    <style>
+      h3 {
+        color: white;
+        font-family: "Ubuntu", sans-serif;
+        position: fixed;
+        left: 30px;
+        top: 0px;
+      }
+
+      body {
+        background: black;
+        padding: 0;
+        margin: 0;
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+      }
+    </style>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <h3>BTC/USD</h3>
+    <canvas id="myCanvas"></canvas>
+    <script src="https://cdn.jsdelivr.net/npm/numbro@2.3.6/dist/numbro.min.js"></script>
+    <script>
+      const canvas = document.getElementById("myCanvas");
+      const ctx = canvas.getContext("2d");
+
+      async function main() {
+        const data = await fetch(
+          "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=2000&interval=daily"
+        )
+          .then((x) => x.json())
+          .then((res) => res.prices.map((x) => x[1]));
+
+        const drawBlock = (x, y, width, height, text) => {
+          const borderRadius = 5;
+
+          ctx.fillStyle = "white";
+          ctx.beginPath();
+          ctx.moveTo(x + borderRadius, y);
+          ctx.lineTo(x + width - borderRadius, y);
+          ctx.arc(
+            x + width - borderRadius,
+            y + borderRadius,
+            borderRadius,
+            1.5 * Math.PI,
+            2 * Math.PI
+          );
+          ctx.lineTo(x + width, y + height - borderRadius);
+          ctx.arc(
+            x + width - borderRadius,
+            y + height - borderRadius,
+            borderRadius,
+            0,
+            0.5 * Math.PI
+          );
+          ctx.lineTo(x + borderRadius, y + height);
+          ctx.arc(
+            x + borderRadius,
+            y + height - borderRadius,
+            borderRadius,
+            0.5 * Math.PI,
+            Math.PI
+          );
+          ctx.lineTo(x, y + borderRadius);
+          ctx.arc(
+            x + borderRadius,
+            y + borderRadius,
+            borderRadius,
+            Math.PI,
+            1.5 * Math.PI
+          );
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.fillStyle = "black";
+          ctx.font = "500 30px 'Ubuntu'";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(text, x + width / 2, y + height / 2);
+        };
+
+        const getMousePos = (canvas, evt) => {
+          const rect = canvas.getBoundingClientRect(),
+            scaleX = canvas.width / rect.width,
+            scaleY = canvas.height / rect.height;
+
+          return {
+            x: (evt.clientX - rect.left) * scaleX,
+            y: (evt.clientY - rect.top) * scaleY,
+          };
+        };
+
+        const drawLines = (x, y) => {
+          ctx.setLineDash([10, 5]);
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(canvas.width, y);
+          ctx.strokeStyle = "#545f60";
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, canvas.height);
+          ctx.stroke();
+        };
+
+        const drawSmoothGraph = (points, lines) => {
+          const pointCount = points.length;
+
+          ctx.setLineDash([]);
+
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+          ctx.lineWidth = 5;
+          ctx.strokeStyle = "#44d05f";
+          ctx.lineJoin = "round";
+
+          const minY = Math.min(...points) - 5000;
+          const maxY = Math.max(...points) + 5000;
+
+          const scaleY = (canvas.height - 50) / (maxY - minY);
+
+          ctx.beginPath();
+
+          ctx.moveTo(0, canvas.height - (points[0] - minY) * scaleY);
+
+          for (let i = 0; i < pointCount - 1; i++) {
+            const x_mid1 = (canvas.width / (pointCount - 1)) * (i + 0.25);
+            const y_mid1 = canvas.height - (points[i] - minY) * scaleY;
+
+            const x_mid2 = (canvas.width / (pointCount - 1)) * (i + 0.75);
+            const y_mid2 = canvas.height - (points[i + 1] - minY) * scaleY;
+
+            const x_end = (canvas.width / (pointCount - 1)) * (i + 1);
+            const y_end = canvas.height - (points[i + 1] - minY) * scaleY;
+
+            ctx.bezierCurveTo(x_mid1, y_mid1, x_mid2, y_mid2, x_end, y_end);
+          }
+
+          ctx.stroke();
+
+          const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+          gradient.addColorStop(0, "rgba(0,255,60,0.47)");
+          gradient.addColorStop(1, "rgba(27,255,46,0)");
+
+          ctx.fillStyle = gradient;
+          ctx.lineTo(canvas.width, canvas.height);
+          ctx.lineTo(0, canvas.height);
+          ctx.closePath();
+          ctx.fill();
+
+          if (lines) {
+            const { x, y } = getMousePos(canvas, lines);
+
+            drawLines(x, y);
+            const candleWidth = canvas.width / data.length;
+            drawBlock(
+              x + 20,
+              y + 20,
+              150,
+              40,
+              numbro(+data[Math.floor(x / candleWidth)].toFixed()).format({
+                thousandSeparated: true,
+              }) + " $"
+            );
+
+            const priceOffset = canvas.height - y;
+            const price = priceOffset / scaleY + minY;
+
+            if (price > 0) {
+              drawBlock(
+                x - 150 - 20,
+                y - 40 - 20,
+                150,
+                40,
+                numbro(price.toFixed()).format({
+                  thousandSeparated: true,
+                }) + " $"
+              );
+            }
+          }
+        };
+
+        canvas.addEventListener("mousemove", (event) => {
+          drawSmoothGraph(data, event);
+        });
+
+        const onResize = () => {
+          const dpr = window.devicePixelRatio;
+
+          canvas.width = window.innerWidth * dpr;
+          canvas.height = window.innerHeight * dpr;
+
+          canvas.style.width = `${window.innerWidth}px`;
+          canvas.style.height = `${window.innerHeight}px`;
+
+          drawSmoothGraph(data);
+        };
+
+        const init = () => {
+          onResize();
+
+          window.onresize = onResize;
+
+          drawSmoothGraph(data);
+        };
+
+        init();
+      }
+
+      main();
+    </script>
+  </body>
+</html>
